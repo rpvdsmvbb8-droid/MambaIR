@@ -71,7 +71,7 @@ network_g:
   resi_connection: '1conv'
 # path
 path:
-  pretrain_network_g: /data2/guohang/pretrained/mambairv2/mambairv2_lightSR_x2.pth
+  pretrain_network_g: experiments/pretrained_models/mambairv2_lightSR_x2.pth
   strict_load_g: true
 
 # validation settings
