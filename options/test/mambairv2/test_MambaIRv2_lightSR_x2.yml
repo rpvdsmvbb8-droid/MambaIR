@@ -7,11 +7,14 @@ manual_seed: 10
 
 datasets:
   test_1:
-    name: MySimpleTest
-    type: SingleImageDataset
-    dataroot_lq: my_test_dataset/LR
+    name: Set5
+    type: PairedImageDataset
+    dataroot_gt: datasets/SR/Set5/HR
+    dataroot_lq: datasets/SR/Set5/LR_bicubic/X2
     io_backend:
       type: disk
+    phase: test
+    scale: 2
 
 network_g:
   type: MambaIRv2Light
