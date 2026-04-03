@@ -39,6 +39,7 @@ path:
 val:
   save_img: false
   suffix: ~
+
   metrics:
     psnr:
       type: calculate_psnr
@@ -50,6 +51,5 @@ val:
       test_y_channel: true
 
 speed_test:
-  warmup: 50          # 预热次数
-  repeats: 200        # 正式测试次数（取平均值）
-  input_size: [256, 256] # 测试分辨率 (H, W)
+  repeats: 100        # 循环运行多少次取平均值
+  input_size: 256     # 输入图片的分辨率 (256x256)
