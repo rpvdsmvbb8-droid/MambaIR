@@ -1,9 +1,9 @@
 import logging
 import torch
 import os
-import time  # 新增：用于计时
 from os import path as osp
 import sys
+import time
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
@@ -27,41 +27,48 @@ def test_pipeline(root_path):
     logger = get_root_logger(logger_name='basicsr', log_level=logging.INFO, log_file=log_file)
     logger.info(dict2str(opt))
 
-    
+    # create model
     model = build_model(opt)
-    model.net_g.eval() # 切换为评估模式
-    net_g = model.net_g.cuda()
+    model.net_g.eval()
 
-    dummy_input = torch.randn(1, 3, 256, 256).cuda() 
-    
+    # generate random input tensor
+    scale = opt['scale']
+    img_size = 256
+    dummy_input = torch.randn(1, 3, img_size, img_size).cuda()
+
+    # warm up
     logger.info("Warming up GPU...")
     with torch.no_grad():
         for _ in range(50):
-            _ = net_g(dummy_input)
-    
+            _ = model.net_g(dummy_input)
+    torch.cuda.synchronize()
 
+    # benchmark
     logger.info("Starting Benchmark...")
-    torch.cuda.synchronize() # 确保之前的代码执行完毕
-    start_time = time.time()
+    repeats = 100
+    timings = []
+
+    starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
 
     with torch.no_grad():
-        for _ in range(200): # 运行 200 次取平均
-            _ = net_g(dummy_input)
-    
-    torch.cuda.synchronize() # 确保所有计算完成
-    end_time = time.time()
+        for _ in range(repeats):
+            starter.record()
+            _ = model.net_g(dummy_input)
+            ender.record()
+            torch.cuda.synchronize()
+            curr_time = starter.elapsed_time(ender)
+            timings.append(curr_time)
 
-    # 5. 计算结果
-    total_time = end_time - start_time
-    avg_time = total_time / 200
-    fps = 1.0 / avg_time
+    avg_time = sum(timings) / repeats
+    fps = 1000 / avg_time
 
-    logger.info("-" * 40)
-    logger.info(f"Speed Test Result (Input: 256x256)")
-    logger.info(f"Total Time: {total_time:.4f} s")
-    logger.info(f"Average Time: {avg_time:.4f} s")
-    logger.info(f"FPS: {fps:.2f}")
-    logger.info("-" * 40)
+    logger.info('-------------------------------------------')
+    logger.info(f'Speed Test Result (Input: {img_size}x{img_size})')
+    logger.info(f'Total Time: {sum(timings) / 1000:.4f} s')
+    logger.info(f'Average Time: {avg_time / 1000:.4f} s')
+    logger.info(f'FPS: {fps:.2f}')
+    logger.info('-------------------------------------------')
+
 
 if __name__ == '__main__':
     root_path = osp.abspath(osp.join(__file__, osp.pardir, osp.pardir))
