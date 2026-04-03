@@ -1,63 +1,68 @@
 import logging
-import time
 import torch
+import os
+import time  # 新增：用于计时
 from os import path as osp
+import sys
 
-from basicsr.models import create_model
-from basicsr.utils import get_root_logger, get_env_info, dict2str
-from basicsr.utils.options import parse_options
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+sys.path.append(parent_dir)
 
-def main():
-    # 1. 解析配置
-    opt = parse_options(is_train=False)
-    logger = get_root_logger(logger_name='basicsr')
-    logger.info(get_env_info())
+from basicsr.data import build_dataloader, build_dataset
+from basicsr.models import build_model
+from basicsr.utils import get_root_logger, get_time_str, make_exp_dirs
+from basicsr.utils.options import dict2str, parse_options
+
+
+def test_pipeline(root_path):
+    # parse options, set distributed setting, set ramdom seed
+    opt, _ = parse_options(root_path, is_train=False)
+
+    torch.backends.cudnn.benchmark = True
+
+    # mkdir and initialize loggers
+    make_exp_dirs(opt)
+    log_file = osp.join(opt['path']['log'], f"test_{opt['name']}_{get_time_str()}.log")
+    logger = get_root_logger(logger_name='basicsr', log_level=logging.INFO, log_file=log_file)
     logger.info(dict2str(opt))
 
-    # 2. 获取速度测试参数
-    speed_opt = opt.get('speed_test', {})
-    warmup = speed_opt.get('warmup', 50)
-    repeats = speed_opt.get('repeats', 200)
-    input_size = speed_opt.get('input_size', [256, 256]) # 读取配置中的分辨率
+    
+    model = build_model(opt)
+    model.net_g.eval() # 切换为评估模式
+    net_g = model.net_g.cuda()
 
-    # 3. 创建模型
-    model = create_model(opt)
-    model.net_g.eval()
-
-    # 4. 准备随机输入
-    # 使用配置中的尺寸生成随机张量 (Batch, Channel, Height, Width)
-    input_tensor = torch.randn(1, 3, input_size[0], input_size[1]).cuda()
-
-    # 5. 预热
-    logger.info(f"Warming up for {warmup} iterations...")
+    dummy_input = torch.randn(1, 3, 256, 256).cuda() 
+    
+    logger.info("Warming up GPU...")
     with torch.no_grad():
-        for _ in range(warmup):
-            _ = model.net_g(input_tensor)
-    torch.cuda.synchronize()
+        for _ in range(50):
+            _ = net_g(dummy_input)
+    
 
-    # 6. 正式测速
-    logger.info(f"Running benchmark for {repeats} iterations...")
-    torch.cuda.synchronize()
+    logger.info("Starting Benchmark...")
+    torch.cuda.synchronize() # 确保之前的代码执行完毕
     start_time = time.time()
 
     with torch.no_grad():
-        for _ in range(repeats):
-            _ = model.net_g(input_tensor)
+        for _ in range(200): # 运行 200 次取平均
+            _ = net_g(dummy_input)
     
-    torch.cuda.synchronize()
+    torch.cuda.synchronize() # 确保所有计算完成
     end_time = time.time()
 
-    # 7. 计算结果
+    # 5. 计算结果
     total_time = end_time - start_time
-    avg_time = total_time / repeats
+    avg_time = total_time / 200
     fps = 1.0 / avg_time
 
     logger.info("-" * 40)
-    logger.info(f"Benchmark Results (Input: {input_size[0]}x{input_size[1]})")
+    logger.info(f"Speed Test Result (Input: 256x256)")
     logger.info(f"Total Time: {total_time:.4f} s")
-    logger.info(f"Average Inference Time: {avg_time:.4f} s")
-    logger.info(f"Frames Per Second (FPS): {fps:.2f}")
+    logger.info(f"Average Time: {avg_time:.4f} s")
+    logger.info(f"FPS: {fps:.2f}")
     logger.info("-" * 40)
 
 if __name__ == '__main__':
-    main()
+    root_path = osp.abspath(osp.join(__file__, osp.pardir, osp.pardir))
+    test_pipeline(root_path)
