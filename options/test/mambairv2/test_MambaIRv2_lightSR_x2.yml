@@ -11,10 +11,9 @@ datasets:
     type: PairedImageDataset
     dataroot_gt: datasets/SR/Set5/HR
     dataroot_lq: datasets/SR/Set5/LR_bicubic/X2
+    filename_tmpl: '{}x2' 
     io_backend:
       type: disk
-    phase: test
-    scale: 2
 
 network_g:
   type: MambaIRv2Light
