@@ -51,5 +51,6 @@ val:
       test_y_channel: true
 
 speed_test:
-  repeats: 100        # 循环运行多少次取平均值
-  input_size: 256     # 输入图片的分辨率 (256x256)
+  input_size: 256
+  warmup: 50
+  repeats: 100
