@@ -652,8 +652,8 @@ class PatchEmbed(nn.Module):
     Args:
         img_size (int): Image size.  Default: 224.
         patch_size (int): Patch token size. Default: 4.
-        in_chans (int): Number of input image channels. Default: 8 (Based on your error log).
-        embed_dim (int): Number of linear projection output channels. Default: 48 (Based on your error log).
+        in_chans (int): Number of input image channels. Default: 8.
+        embed_dim (int): Number of linear projection output channels. Default: 48.
         norm_layer (nn.Module, optional): Normalization layer. Default: None
     """
 
@@ -679,8 +679,11 @@ class PatchEmbed(nn.Module):
             self.norm = None
 
     def forward(self, x):
-        x = self.proj(x)  # 输出形状: [B, 48, H/4, W/4]
-        x = x.flatten(2).transpose(1, 2)  # 输出形状: [B, N, 48]
+
+        x = self.proj(x)  # [B, embed_dim, H', W']
+
+
+        x = x.flatten(2).transpose(1, 2)  # [B, N, C]
 
         if self.norm is not None:
             x = self.norm(x)
@@ -689,12 +692,12 @@ class PatchEmbed(nn.Module):
     def flops(self, input_resolution=None):
         flops = 0
         h, w = self.img_size if input_resolution is None else input_resolution
-        # Conv2d Flops 计算
-        num_patches = (h // self.patch_size[0]) * (w // self.patch_size[1])
-        kernel_ops = self.patch_size[0] * self.patch_size[1] * self.in_chans * self.embed_dim
-        flops += num_patches * kernel_ops
-        
+        # Conv2d Flops
+        flops += h * w * self.in_chans * self.embed_dim // (self.patch_size[0] * self.patch_size[1])
         if self.norm is not None:
+            flops += h * w * self.embed_dim // (self.patch_size[0] * self.patch_size[1]) * self.embed_dim
+        return flops
+
 
 
 class PatchUnEmbed(nn.Module):
