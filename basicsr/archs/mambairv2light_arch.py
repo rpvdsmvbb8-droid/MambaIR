@@ -647,7 +647,7 @@ class ASSB(nn.Module):
 
 
 class PatchEmbed(nn.Module):
-    r""" Image to Patch Embedding
+    r""" Image to Patch Embedding (Optimized with Operator Fusion)
 
     Args:
         img_size (int): Image size.  Default: 224.
@@ -676,7 +676,7 @@ class PatchEmbed(nn.Module):
             self.norm = None
 
     def forward(self, x):
-        x = x.flatten(2).transpose(1, 2)  # b Ph*Pw c
+
         if self.norm is not None:
             x = self.norm(x)
         return x
@@ -684,8 +684,10 @@ class PatchEmbed(nn.Module):
     def flops(self, input_resolution=None):
         flops = 0
         h, w = self.img_size if input_resolution is None else input_resolution
+        # 更新 FLOPs 计算，加上卷积的计算量
+        flops += h * w * self.patch_size[0] * self.patch_size[1] * self.in_chans * self.embed_dim
         if self.norm is not None:
-            flops += h * w * self.embed_dim
+            flops += h * w // (self.patch_size[0] * self.patch_size[1]) * self.embed_dim
         return flops
 
 
