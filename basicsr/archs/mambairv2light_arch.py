@@ -647,17 +647,17 @@ class ASSB(nn.Module):
 
 
 class PatchEmbed(nn.Module):
-    r""" Image to Patch Embedding (Fixed for Pretrained Weights)
+    r""" Image to Patch Embedding
 
     Args:
         img_size (int): Image size.  Default: 224.
         patch_size (int): Patch token size. Default: 4.
-        in_chans (int): Number of input image channels. Default: 8.
-        embed_dim (int): Number of linear projection output channels. Default: 48.
+        in_chans (int): Number of input image channels. Default: 3.
+        embed_dim (int): Number of linear projection output channels. Default: 96.
         norm_layer (nn.Module, optional): Normalization layer. Default: None
     """
 
-    def __init__(self, img_size=224, patch_size=4, in_chans=8, embed_dim=48, norm_layer=None):
+    def __init__(self, img_size=224, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
@@ -670,20 +670,13 @@ class PatchEmbed(nn.Module):
         self.in_chans = in_chans
         self.embed_dim = embed_dim
 
-        # 1. 核心修改：定义卷积层，并命名为 proj (为了匹配权重文件的键名，虽然我们会跳过它)
-        # 输入是 in_chans (8)，输出是 embed_dim (48)，卷积核大小等于 patch_size
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
-
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
         else:
             self.norm = None
 
     def forward(self, x):
-        # 2. 核心修改：直接使用卷积进行切块和投影
-        # 输入 x: (B, 8, H, W) -> 输出 x: (B, 48, H/4, W/4)
-        x = self.proj(x)
-        x = x.flatten(2).transpose(1, 2)  # (B, 48, H/4, W/4) -> (B, N, 48)
+        x = x.flatten(2).transpose(1, 2)  # b Ph*Pw c
         if self.norm is not None:
             x = self.norm(x)
         return x
@@ -691,32 +684,9 @@ class PatchEmbed(nn.Module):
     def flops(self, input_resolution=None):
         flops = 0
         h, w = self.img_size if input_resolution is None else input_resolution
-        # 计算卷积的 FLOPs
-        # 这里的计算是估算值，具体取决于实现
-        flops += h * w * self.in_chans * self.embed_dim // (self.patch_size[0] * self.patch_size[1])
         if self.norm is not None:
-            flops += h * w // (self.patch_size[0] * self.patch_size[1]) * self.embed_dim
+            flops += h * w * self.embed_dim
         return flops
-
-    # 3. 核心修改：重写加载函数，跳过 proj 的权重加载
-    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
-        # 获取当前模块的键名
-        my_keys = list(self.state_dict().keys())
-
-        # 检查权重文件里是否有 proj 的权重
-        proj_weight_key = prefix + 'proj.weight'
-        proj_bias_key = prefix + 'proj.bias'
-
-        # 如果有，就从传入的 state_dict 中移除它们，防止报错
-        # 这样就能加载旧模型的权重了
-        if proj_weight_key in state_dict:
-            del state_dict[proj_weight_key]
-        if proj_bias_key in state_dict:
-            del state_dict[proj_bias_key]
-
-        # 调用父类的加载函数
-        super()._load_from_state_dict(state_dict, prefix, local_metadata, False, missing_keys, unexpected_keys, error_msgs)
-
 
 
 class PatchUnEmbed(nn.Module):
